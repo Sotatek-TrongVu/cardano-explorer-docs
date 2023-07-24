@@ -1,0 +1,384 @@
+version: "3.5"
+name: explorer
+networks:
+  explorer-net:
+
+
+services:
+  explorer-postgres:
+    image: postgres:14
+    container_name: explorer-postgres
+    hostname: ${POSTGRES_HOST}
+    restart: always
+    volumes:
+      - ${POSTGRES_DATA_DIR}:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - ${POSTGRES_PORT}:5432
+    networks:
+      - explorer-net
+
+
+  explorer-zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.2
+    container_name: explorer-zookeeper
+    hostname: ${ZOOKEEPER_HOSTNAME}
+    restart: always
+    environment:
+      - ZOOKEEPER_CLIENT_PORT=${ZOOKEEPER_PORT}
+      - ZOOKEEPER_TICK_TIME=2000
+      - ZOOKEEPER_SYNC_LIMIT=2
+    ports:
+      - ${ZOOKEEPER_PORT}:${ZOOKEEPER_PORT}
+    networks:
+      - explorer-net
+    volumes:
+      - ${ZOOKEEPER_DATA_DIR}:/var/lib/zookeeper/data
+      - ${ZOOKEEPER_LOG_DIR}/log:/var/lib/zookeeper/log
+  
+  explorer-kafka:
+    image:  confluentinc/cp-kafka:7.3.2
+    container_name: explorer-kafka
+    hostname: ${KAFKA_INTERNAL_HOST}
+    restart: always
+    ports:
+      - ${KAFKA_LOCALHOST_PORT}:${KAFKA_LOCALHOST_PORT}
+      - ${KAFKA_EXTERNAL_PORT}:${KAFKA_EXTERNAL_PORT}
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_ZOOKEEPER_CONNECT=${ZOOKEEPER_HOSTNAME}:${ZOOKEEPER_PORT}
+      - KAFKA_LISTENERS=INTERNAL_LOCALHOST_LISTENER://0.0.0.0:${KAFKA_LOCALHOST_PORT},EXTERNAL_LISTENER://0.0.0.0:${KAFKA_EXTERNAL_PORT}, INTERNAL_DOCKER_LISTENER://${KAFKA_INTERNAL_HOST}:${KAFKA_INTERNAL_PORT}
+      - KAFKA_ADVERTISED_LISTENERS=INTERNAL_LOCALHOST_LISTENER://${KAFKA_LOCALHOST_HOSTNAME}:${KAFKA_LOCALHOST_PORT},EXTERNAL_LISTENER://${KAFKA_EXTERNAL_HOST}:${KAFKA_EXTERNAL_PORT}, INTERNAL_DOCKER_LISTENER://${KAFKA_INTERNAL_HOST}:${KAFKA_INTERNAL_PORT}
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL_LOCALHOST_LISTENER:PLAINTEXT,EXTERNAL_LISTENER:PLAINTEXT,INTERNAL_DOCKER_LISTENER:PLAINTEXT
+      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL_DOCKER_LISTENER
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+    
+    networks:
+      - explorer-net
+    volumes:
+      - ${KAFKA_DATA_DIR}:/var/lib/kafka/data
+
+  explorer-redis-master:
+    image: redis:6.2.6
+    container_name: explorer-redis-master
+    hostname: ${REDIS_MASTER_HOST}
+    restart: always
+    environment:
+      - REDIS_PASSWORD=${REDIS_MASTER_PASSWORD}
+      - REDIS_REPLICATION_MODE=master
+    ports:
+      - ${REDIS_MASTER_PORT}:6379
+    networks:
+      - explorer-net
+
+  explorer-redis-slave:
+    image: redis:6.2.6
+    container_name: explorer-redis-slave
+    hostname: ${REDIS_SLAVE_HOSTNAME}
+    restart: always
+    environment:
+      - REDIS_PASSWORD=${REDIS_SLAVE_PASSWORD}
+      - REDIS_MASTER_HOST=${REDIS_MASTER_HOST}
+      - REDIS_REPLICATION_MODE=slave
+      - REDIS_MASTER_PASSWORD=${REDIS_MASTER_PASSWORD}
+    ports:
+      - ${REDIS_SLAVE_PORT}:6379
+    depends_on:
+      - explorer-redis-master
+    networks:
+      - explorer-net
+    command: redis-server --slave-read-only yes --slaveof ${REDIS_MASTER_HOST} 6379
+  
+  explorer-redis-sentinel:
+    image: bitnami/redis-sentinel:latest
+    container_name: explorer-redis-sentinel
+    hostname: ${REDIS_SENTINEL_HOST}
+    restart: always
+    environment:
+      - REDIS_MASTER_HOST=${REDIS_MASTER_HOST}
+      - REDIS_MASTER_PASSWORD=${REDIS_MASTER_PASSWORD}
+      - REDIS_MASTER_PORT_NUMBER=${REDIS_MASTER_PORT}
+      - REDIS_MASTER_SET=${REDIS_MASTER_SET}
+      - REDIS_SENTINEL_DOWN_AFTER_MILLISECONDS=5000
+      - REDIS_SENTINEL_FAILOVER_TIMEOUT=500
+      - REDIS_SENTINEL_PASSWORD=${REDIS_SENTINEL_PASSWORD}
+    ports:
+      - ${REDIS_SENTINEL_EXTERNAL_PORT}:26379
+    depends_on:
+      - explorer-redis-master
+      - explorer-redis-slave
+    networks:
+      - explorer-net
+
+
+  explorer-minio:
+    image: minio/minio:RELEASE.2023-07-11T21-29-34Z
+    container_name: explorer-minio
+    hostname: ${MINIO_HOSTNAME}
+    restart: always
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+    ports:
+      - ${MINIO_API_PORT}:${MINIO_API_PORT}
+      - ${MINIO_CONSOLE_PORT}:${MINIO_CONSOLE_PORT}
+    volumes:
+      - ${MINIO_DATA_DIR}:/data
+    networks:
+      - explorer-net
+  
+    command: server /data --console-address ":${MINIO_CONSOLE_PORT}"
+  
+  explorer-crawler:
+    image: hiiamtrong/explorer-crawler:${CRAWLER_VERSION}
+    container_name: explorer-crawler
+    hostname: ${CRAWLER_HOSTNAME}
+    restart: always
+    depends_on:
+      - explorer-kafka
+      - explorer-redis-sentinel
+
+    environment:
+      - SPRING_PROFILES_ACTIVE=${CRAWLER_SPRING_PROFILES_ACTIVE}
+      - PORT=${CRAWLER_PORT}
+      - BOOTSTRAP_SERVER=${KAFKA_INTERNAL_HOST}:${KAFKA_INTERNAL_PORT}
+      - REDIS_MASTER_NAME=${REDIS_MASTER_SET}
+      - REDIS_SENTINEL_PASS=${REDIS_SENTINEL_PASSWORD}
+      - REDIS_SENTINEL_HOST=${REDIS_SENTINEL_EXTERNAL_HOST}
+      - REDIS_SENTINEL_PORT=${REDIS_SENTINEL_EXTERNAL_PORT}
+
+      - CRAWLER_NAME=${CRAWLER_NAME:-dev-crawler}
+      - BLOCKS_TOPIC=${CRAWLER_BLOCKS_TOPIC}
+      - BLOCKS_ROLLBACK_TOPIC=${BLOCKS_ROLLBACK_TOPIC}
+
+      - NETWORK_MAGIC=${CRAWLER_NETWORK_MAGIC:-764824073}
+      - NODE_ADDRESS=${CRAWLER_NODE_ADDRESS:-relays-new.cardano-mainnet.iohk.io}
+      - NODE_PORT=${CRAWLER_NODE_PORT:-3001}
+    
+    networks:
+      - explorer-net
+
+  explorer-consumer:
+    image: hiiamtrong/explorer-consumer:${CONSUMER_VERSION}
+    container_name: explorer-consumer
+    hostname: ${CONSUMER_HOSTNAME}
+    restart: always
+    depends_on:
+      - explorer-kafka
+      - explorer-redis-sentinel
+      - explorer-postgres
+    networks:
+      - explorer-net
+    
+    environment:
+      - SPRING_PROFILES_ACTIVE=${CONSUMER_SPRING_PROFILES_ACTIVE}
+      - SERVER_PORT=${CONSUMER_PORT}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - BOOTSTRAP_SERVERS=${KAFKA_INTERNAL_HOST}:${KAFKA_INTERNAL_PORT}
+      - BLOCKS_TOPIC=${CRAWLER_BLOCKS_TOPIC}
+      - SCHEMA=${CONSUMER_SCHEMA}
+      - LOG=${CONSUMER_LOG_LEVEL}
+      - BLOCKS_BATCH_SIZE=${CONSUMER_BLOCKS_BATCH_SIZE}
+      - COMMIT_THRESHOLD=${CONSUMER_COMMIT_THRESHOLD}
+      - JDBC_BATCH_SIZE=${CONSUMER_JDBC_BATCH_SIZE}
+      - FLYWAY_ENABLE=${CONSUMER_FLYWAY_ENABLE}
+      - FLYWAY_VALIDATE=${CONSUMER_FLYWAY_VALIDATE}
+      - MAXIMUM_POOL_SIZE=${CONSUMER_MAXIMUM_POOL_SIZE}
+      - ALLOW_CREATE_SCHEMA=${CONSUMER_ALLOW_CREATE_SCHEMA}
+      - SUBMIT_API_CONFIG_URL=${CONSUMER_SUBMIT_API_CONFIG_URL}
+      - BYRON_GENESIS_URL=${CONSUMER_BYRON_GENESIS_URL}
+      - SHELLEY_GENESIS_URL=${CONSUMER_SHELLEY_GENESIS_URL}
+      - ALONZO_GENESIS_URL=${CONSUMER_ALONZO_GENESIS_URL}
+      - CONWAY_GENESIS_URL=${CONSUMER_CONWAY_GENESIS_URL}
+      - REDIS_SENTINEL_DATABASE=${REDIS_SENTINEL_DATABASE}
+      - REDIS_MASTER_NAME=${REDIS_MASTER_SET}
+      - REDIS_SENTINEL_PASSWORD=${REDIS_SENTINEL_PASSWORD}
+      - REDIS_SENTINEL_HOST=${REDIS_SENTINEL_EXTERNAL_HOST}
+      - REDIS_SENTINEL_PORT=${REDIS_SENTINEL_EXTERNAL_PORT}
+    
+    ports:
+      - ${CONSUMER_PORT}:${CONSUMER_PORT}
+
+  explorer-reward:
+    image: hiiamtrong/explorer-reward:${REWARD_VERSION}
+    container_name: explorer-reward
+    hostname: ${REWARD_HOSTNAME}
+    restart: always
+    depends_on:
+      - explorer-postgres
+    networks:
+      - explorer-net
+    environment:
+      - SPRING_PROFILES_ACTIVE=${REWARD_SPRING_PROFILES_ACTIVE}
+      - SERVER_PORT=${REWARD_PORT}
+      - NETWORK=${REWARD_NETWORK}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_SCHEMA=${REWARD_SCHEMA}
+      - REWARD_LIST_SIZE_EACH_THREAD=${REWARD_LIST_SIZE_EACH_THREAD}
+      - EPOCH_STAKE_LIST_SIZE_EACH_THREAD=${REWARD_EPOCH_STAKE_LIST_SIZE_EACH_THREAD}
+      - POOL_INFO_LIST_SIZE_EACH_THREAD=${REWARD_POOL_INFO_LIST_SIZE_EACH_THREAD}
+      - POOL_MAX_SIZE=${REWARD_POOL_MAX_SIZE}
+      - POOL_CORE_SIZE=${REWARD_POOL_CORE_SIZE}
+      - FLYWAY_ENABLE=${REWARD_FLYWAY_ENABLE}
+      - FLYWAY_VALIDATE=${REWARD_FLYWAY_VALIDATE}
+      - POOL_INFO_DATA_JOB_ENABLED=${REWARD_POOL_INFO_DATA_JOB_ENABLED}
+      - FETCH_AND_SAVE_POOL_INFO_DATA_DELAY=${REWARD_FETCH_AND_SAVE_POOL_INFO_DATA_DELAY}
+      - KOIOS_BASE_URL_ENABLED=${REWARD_KOIOS_BASE_URL_ENABLED}
+      - KOIOS_BASE_URL=${REWARD_KOIOS_BASE_URL}
+    ports:
+      - ${REWARD_PORT}:${REWARD_PORT}      
+
+  explorer-schedule:
+    image: hiiamtrong/explorer-schedule:${SCHEDULE_VERSION}
+    container_name: explorer-schedule
+    hostname: ${SCHEDULE_HOSTNAME}
+    restart: always
+    depends_on:
+      - explorer-postgres
+      - explorer-minio
+      - explorer-kafka
+      - explorer-redis-sentinel
+      - explorer-reward
+    networks:
+      - explorer-net
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SCHEDULE_SPRING_PROFILES_ACTIVE}
+      - SERVER_PORT=${SCHEDULE_PORT}
+      
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_SCHEMA=${SCHEDULE_SCHEMA}
+      - FLYWAY_ENABLE=${SCHEDULE_FLYWAY_ENABLE}
+      - FLYWAY_VALIDATE=${SCHEDULE_FLYWAY_VALIDATE}
+
+      - MAXIMUM_POOL_SIZE=${SCHEDULE_MAXIMUM_POOL_SIZE}
+      - META_DATA_JOB_ENABLED=${SCHEDULE_META_DATA_JOB_ENABLED}
+      - REPORT_HISTORY_JOB_ENABLED=${SCHEDULE_REPORT_HISTORY_JOB_ENABLED}
+      - SET_EXPIRED_REPORTS_DELAY=${SCHEDULE_SET_EXPIRED_REPORTS_DELAY}
+      - LIMIT_CONTENT_PER_SHEET=${SCHEDULE_LIMIT_CONTENT_PER_SHEET}
+      - POOL_OFFLINE_DATA_JOB_ENABLED=${SCHEDULE_POOL_OFFLINE_DATA_JOB_ENABLED}
+      - CRAWL_POOL_DATA_DELAY=${SCHEDULE_CRAWL_POOL_DATA_DELAY}
+      - TOKEN_METADATA_URL=${SCHEDULE_TOKEN_METADATA_URL}
+      - TOKEN_METADATA_FOLDER=${SCHEDULE_TOKEN_METADATA_FOLDER}
+      - NETWORK_NAME=${SCHEDULE_NETWORK_NAME}
+      - KAFKA_CONFIGURATION_ENABLED=${SCHEDULE_KAFKA_CONFIGURATION_ENABLED}
+      - KAFKA_BOOSTRAP_SERVER_URL=${KAFKA_INTERNAL_HOST}:${KAFKA_INTERNAL_PORT}
+      - KAFKA_GROUP_ID=${SCHEDULE_KAFKA_GROUP_ID}
+      - KAFKA_REPORTS_TOPIC=${SCHEDULE_KAFKA_REPORTS_TOPIC}
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - S3_REGION=${SCHEDULE_S3_REGION:-null}
+      - S3_BUCKET_NAME=${SCHEDULE_S3_BUCKET_NAME}
+      - S3_PATH_STYLE_ENABLED=${S3_PATH_STYLE_ENABLED:-true}
+      - S3_STORAGE_ENDPOINT=http://${MINIO_HOSTNAME}:${MINIO_API_PORT}
+      - API_CHECK_REWARD_URL=${SCHEDULE_API_CHECK_REWARD_URL}
+      - API_CHECK_POOL_HISTORY_URL=${SCHEDULE_API_CHECK_POOL_HISTORY_URL}
+      - REDIS_SENTINEL_MASTER_NAME=${REDIS_MASTER_SET}
+      - REDIS_SENTINEL_PASSWORD=${REDIS_SENTINEL_PASSWORD}
+      - REDIS_SENTINEL_HOST=${REDIS_SENTINEL_EXTERNAL_HOST}
+      - REDIS_SENTINEL_PORT=${REDIS_SENTINEL_EXTERNAL_PORT}
+      - TOP_DELEGATORS_FIXED_DELAY=${SCHEDULE_TOP_DELEGATORS_FIXED_DELAY}
+      - POOL_STATUS_FIXED_DELAY=${SCHEDULE_POOL_STATUS_FIXED_DELAY}
+      - NUMBER_DELEGATOR_FIXED_DELAY=${SCHEDULE_NUMBER_DELEGATOR_FIXED_DELAY}
+      - UNIQUE_ACCOUNT_FIXED_DELAY=${SCHEDULE_UNIQUE_ACCOUNT_FIXED_DELAY}
+      - UNIQUE_ACCOUNT_ENABLED=${SCHEDULE_UNIQUE_ACCOUNT_ENABLED}
+      - TOKEN_INFO_JOB_ENABLED=${SCHEDULE_TOKEN_INFO_JOB_ENABLED}
+      - TOKEN_INFO_FIXED_DELAY=${SCHEDULE_TOKEN_INFO_FIXED_DELAY}
+
+    ports:
+      - ${SCHEDULE_PORT}:${SCHEDULE_PORT}
+
+
+  explorer-api:
+    container_name: explorer-api
+    image: hiiamtrong/explorer-api:${API_VERSION}
+    hostname: ${API_HOSTNAME}
+    restart: always
+    depends_on:
+      - explorer-postgres
+      - explorer-minio
+      - explorer-kafka
+      - explorer-redis-sentinel
+      - explorer-reward
+    networks:
+      - explorer-net
+    environment:
+      - SPRING_PROFILES_ACTIVE=${API_SPRING_PROFILES_ACTIVE}
+      - DB_HOST=${POSTGRES_HOST}
+      - DB_PORT=${POSTGRES_PORT}
+      - DB_USERNAME=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
+      - DB_SCHEMA=${API_DB_SCHEMA}
+      - DB_MAXIMUM_POOL_SIZE=${API_DB_MAX_POOL_SIZE}
+
+      - REDIS_SENTINEL_MASTER_NAME=${REDIS_MASTER_SET}
+      - REDIS_SENTINEL_PASSWORD=${REDIS_MASTER_PASSWORD}
+      - REDIS_SENTINEL_HOST=${REDIS_SENTINEL_EXTERNAL_HOST}
+      - REDIS_SENTINEL_PORT=${REDIS_SENTINEL_EXTERNAL_PORT}
+      - PORT=${API_PORT}
+
+      - KAFKA_BOOTSTRAP_SERVER=${KAFKA_INTERNAL_HOST}:${KAFKA_INTERNAL_PORT}
+      - KAFKA_REPORTS_TOPIC=${API_KAFKA_REPORTS_TOPIC}
+      - S3_ACCESS_KEY=${MINIO_ROOT_USER}
+      - S3_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - S3_REGION=${API_S3_REGION}
+      - S3_BUCKET_NAME=${API_S3_BUCKET_NAME}
+      - S3_STORAGE_ENDPOINT=http://${MINIO_HOSTNAME}:${MINIO_API_PORT}
+
+      - API_CHECK_REWARD_URL=${API_CHECK_REWARD_URL}
+      - API_CHECK_POOL_HISTORY_URL=${API_CHECK_POOL_HISTORY_URL}
+      - API_CHECK_POOL_INFO_URL=${API_CHECK_POOL_INFO_URL}
+      - API_CHECK_EPOCH_STAKE_URL=${API_CHECK_EPOCH_STAKE_URL}
+      - API_CHECK_ADA_POTS_URL=${API_CHECK_ADA_POTS_URL}
+
+      - API_NEWS_URL=${API_NEWS_URL}
+      - API_NEWS_CACHE_TIME=${API_NEWS_CACHE_TIME}
+      - API_MARKET_URL=${API_MARKET_URL}
+      - API_MARKET_CACHE_TIME=${API_MARKET_CACHE_TIME}
+      - API_CHECK_EPOCH_URL=${API_CHECK_EPOCH_URL}
+
+      - EPOCH_DAYS=${API_EPOCH_DAYS}
+      - REPORT_LIMIT_PER_24HOURS=${API_REPORT_LIMIT_PER_24HOURS}
+    ports:
+      - ${API_PORT}:${API_PORT}
+    
+  explorer-frontend:
+    container_name: explorer-frontend
+    image: hiiamtrong/explorer-frontend:${FRONTEND_VERSION}
+    hostname: ${FRONTEND_HOSTNAME}
+    restart: always
+    depends_on:
+      - explorer-api
+    networks:
+      - explorer-net
+    environment:
+      - REACT_APP_NETWORK=${REACT_APP_NETWORK}
+      - REACT_APP_API_URL=${REACT_APP_API_URL}
+
+      - REACT_APP_AUTH_API_URL=${REACT_APP_AUTH_API_URL}
+      - REACT_APP_JSD_WIDGET_KEY=${REACT_APP_JSD_WIDGET_KEY}
+      - REACT_APP_PREPROD_APP_URL=${REACT_APP_PREPROD_APP_URL}
+      - REACT_APP_EXT_ADA_PRICE_URL=${REACT_APP_EXT_ADA_PRICE_URL}
+      - REACT_APP_CARDANO_NEWS_URL=${REACT_APP_CARDANO_NEWS_URL}
+      - REACT_APP_NETWORK_NAMES=${REACT_APP_NETWORK_NAMES}
+
+    ports:
+      - ${FRONTEND_PORT}:80
