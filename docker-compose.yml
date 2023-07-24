@@ -41,6 +41,7 @@ services:
     container_name: explorer-zookeeper
     hostname: ${ZOOKEEPER_HOSTNAME}
     restart: always
+    user: root
     environment:
       - ZOOKEEPER_CLIENT_PORT=${ZOOKEEPER_PORT}
       - ZOOKEEPER_TICK_TIME=2000
@@ -52,12 +53,13 @@ services:
     volumes:
       - ${ZOOKEEPER_DATA_DIR}:/var/lib/zookeeper/data
       - ${ZOOKEEPER_LOG_DIR}/log:/var/lib/zookeeper/log
-  
+
   explorer-kafka:
-    image:  confluentinc/cp-kafka:7.3.2
+    image: confluentinc/cp-kafka:7.3.2
     container_name: explorer-kafka
     hostname: ${KAFKA_INTERNAL_HOST}
     restart: always
+    user: root
     ports:
       - ${KAFKA_LOCALHOST_PORT}:${KAFKA_LOCALHOST_PORT}
       - ${KAFKA_EXTERNAL_PORT}:${KAFKA_EXTERNAL_PORT}
@@ -70,7 +72,7 @@ services:
       - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL_DOCKER_LISTENER
       - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
       - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
-    
+
     networks:
       - explorer-net
     volumes:
@@ -106,7 +108,7 @@ services:
     networks:
       - explorer-net
     command: redis-server --slave-read-only yes --slaveof ${REDIS_MASTER_HOST} 6379
-  
+
   explorer-redis-sentinel:
     image: bitnami/redis-sentinel:latest
     container_name: explorer-redis-sentinel
@@ -128,7 +130,6 @@ services:
     networks:
       - explorer-net
 
-
   explorer-minio:
     image: minio/minio:RELEASE.2023-07-11T21-29-34Z
     container_name: explorer-minio
@@ -146,11 +147,11 @@ services:
       - ${MINIO_DATA_DIR}:/data
     networks:
       - explorer-net
-  
+
     command: server /data --console-address ":${MINIO_CONSOLE_PORT}"
-  
+
   explorer-crawler:
-    image: hiiamtrong/explorer-crawler:${CRAWLER_VERSION}
+    image: pro.registry.gitlab.metadata.dev.cf-deployments.org/base-infrastructure/docker-registry/cf-ledger-crawler:${CRAWLER_VERSION}
     container_name: explorer-crawler
     hostname: ${CRAWLER_HOSTNAME}
     restart: always
@@ -174,12 +175,12 @@ services:
       - NETWORK_MAGIC=${CRAWLER_NETWORK_MAGIC:-764824073}
       - NODE_ADDRESS=${CRAWLER_NODE_ADDRESS:-relays-new.cardano-mainnet.iohk.io}
       - NODE_PORT=${CRAWLER_NODE_PORT:-3001}
-    
+
     networks:
       - explorer-net
 
   explorer-consumer:
-    image: hiiamtrong/explorer-consumer:${CONSUMER_VERSION}
+    image: pro.registry.gitlab.metadata.dev.cf-deployments.org/base-infrastructure/docker-registry/cf-ledger-consumer:${CONSUMER_VERSION}
     container_name: explorer-consumer
     hostname: ${CONSUMER_HOSTNAME}
     restart: always
@@ -189,7 +190,7 @@ services:
       - explorer-postgres
     networks:
       - explorer-net
-    
+
     environment:
       - SPRING_PROFILES_ACTIVE=${CONSUMER_SPRING_PROFILES_ACTIVE}
       - SERVER_PORT=${CONSUMER_PORT}
@@ -219,12 +220,12 @@ services:
       - REDIS_SENTINEL_PASSWORD=${REDIS_SENTINEL_PASSWORD}
       - REDIS_SENTINEL_HOST=${REDIS_SENTINEL_EXTERNAL_HOST}
       - REDIS_SENTINEL_PORT=${REDIS_SENTINEL_EXTERNAL_PORT}
-    
+
     ports:
       - ${CONSUMER_PORT}:${CONSUMER_PORT}
 
   explorer-reward:
-    image: hiiamtrong/explorer-reward:${REWARD_VERSION}
+    image: pro.registry.gitlab.metadata.dev.cf-deployments.org/base-infrastructure/docker-registry/cf-explorer-rewards:${REWARD_VERSION}
     container_name: explorer-reward
     hostname: ${REWARD_HOSTNAME}
     restart: always
@@ -254,10 +255,10 @@ services:
       - KOIOS_BASE_URL_ENABLED=${REWARD_KOIOS_BASE_URL_ENABLED}
       - KOIOS_BASE_URL=${REWARD_KOIOS_BASE_URL}
     ports:
-      - ${REWARD_PORT}:${REWARD_PORT}      
+      - ${REWARD_PORT}:${REWARD_PORT}
 
   explorer-schedule:
-    image: hiiamtrong/explorer-schedule:${SCHEDULE_VERSION}
+    image: pro.registry.gitlab.metadata.dev.cf-deployments.org/base-infrastructure/docker-registry/cf-ledger-consumer-schedules:${SCHEDULE_VERSION}
     container_name: explorer-schedule
     hostname: ${SCHEDULE_HOSTNAME}
     restart: always
@@ -272,7 +273,7 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=${SCHEDULE_SPRING_PROFILES_ACTIVE}
       - SERVER_PORT=${SCHEDULE_PORT}
-      
+
       - POSTGRES_HOST=${POSTGRES_HOST}
       - POSTGRES_PORT=${POSTGRES_EXTERNAL_PORT}
       - POSTGRES_DB=${POSTGRES_DB}
@@ -319,10 +320,9 @@ services:
     ports:
       - ${SCHEDULE_PORT}:${SCHEDULE_PORT}
 
-
   explorer-api:
     container_name: explorer-api
-    image: hiiamtrong/explorer-api:${API_VERSION}
+    image: pro.registry.gitlab.metadata.dev.cf-deployments.org/base-infrastructure/docker-registry/cf-explorer-api:${API_VERSION}
     hostname: ${API_HOSTNAME}
     restart: always
     depends_on:
@@ -376,7 +376,7 @@ services:
 
   explorer-authentication:
     container_name: explorer-authentication
-    image: hiiamtrong/explorer-authentication:${AUTHENTICATION_VERSION}
+    image: pro.registry.gitlab.metadata.dev.cf-deployments.org/base-infrastructure/docker-registry/cf-explorer-authentication:${AUTHENTICATION_VERSION}
     hostname: ${AUTHENTICATION_HOSTNAME}
     restart: always
     depends_on:
@@ -401,17 +401,16 @@ services:
 
       - SWAGGER_CLIENT_URL=${AUTHENTICATION_SWAGGER_CLIENT_URL}
       - SWAGGER_SERVER_URL=${AUTHENTICATION_SWAGGER_SERVER_URL}
-    volumes:
-      - ${AUTH_POSTGRES_DATA_DIR}:/var/lib/postgresql/data
     ports:
-      - ${AUTHENTICATION_EXTERNAL_PORT}:${AUTHENTICATION_PORT}
+      - ${AUTHENTICATION_EXTERNAL_PORT}:8080
   explorer-frontend:
     container_name: explorer-frontend
-    image: hiiamtrong/explorer-frontend:${FRONTEND_VERSION}
+    image: pro.registry.gitlab.metadata.dev.cf-deployments.org/base-infrastructure/docker-registry/cf-explorer-frontend:${FRONTEND_VERSION}
     hostname: ${FRONTEND_HOSTNAME}
     restart: always
     depends_on:
       - explorer-api
+      - explorer-authentication
     networks:
       - explorer-net
     environment:
