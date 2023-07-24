@@ -41,7 +41,7 @@ if ! [ -x "$(command -v docker-compose)" ]; then
     COMPOSE_CMD="docker compose"
 fi
 
-command=(up down)
+command=(up down config)
 if [[ ! " ${command[@]} " =~ " ${1} " ]]; then
     echo "Usage: $0 {up|down}"
     exit 1
@@ -56,5 +56,9 @@ up)
 down)
     echo "Stopping containers..."
     $COMPOSE_CMD --env-file $CONFIG_FILE down
+    ;;
+config)
+    echo "Generating config files..."
+    $COMPOSE_CMD --env-file $CONFIG_FILE config
     ;;
 esac
