@@ -73,11 +73,11 @@ MINIO_ROOT_PASSWORD=root_secret_ne
 CRAWLER_HOSTNAME=explorer-crawler
 CRAWLER_PORT=8765
 CRAWLER_SPRING_PROFILES_ACTIVE=n2n,sentinel,kafka
-CRAWLER_NAME=mainnet-crawler
-CRAWLER_BLOCKS_TOPIC=mainnet.crawler.blocks
-BLOCKS_ROLLBACK_TOPIC=mainnet.crawler.blocks.rollback
-CRAWLER_ENVIRONMENT=mainnet
-CRAWLER_NETWORK_MAGIC=764824073
+CRAWLER_NAME={NETWORK}-crawler
+CRAWLER_BLOCKS_TOPIC={NETWORK}.crawler.blocks
+BLOCKS_ROLLBACK_TOPIC={NETWORK}.crawler.blocks.rollback
+CRAWLER_ENVIRONMENT={NETWORK}
+CRAWLER_NETWORK_MAGIC={NETWORK_MAGIC}
 
 CRAWLER_NODE_ADDRESS=10.4.10.231
 CRAWLER_NODE_PORT=3004
@@ -86,8 +86,8 @@ CRAWLER_NODE_PORT=3004
 CONSUMER_HOSTNAME=explorer-consumer
 CONSUMER_PORT=8766
 CONSUMER_SPRING_PROFILES_ACTIVE=dev,redis-sentinel,caching
-CONSUMER_SCHEMA=mainnet
-CONSUMER_NETWORK=764824073
+CONSUMER_SCHEMA={NETWORK}
+CONSUMER_NETWORK={NETWORK_MAGIC}
 CONSUMER_LOG_LEVEL=DEBUG
 
 CONSUMER_BLOCKS_BATCH_SIZE=1000
@@ -98,18 +98,18 @@ CONSUMER_MAXIMUM_POOL_SIZE=80
 CONSUMER_FILE_GENESIS_PATH=/genesis/
 CONSUMER_FLYWAY_VALIDATE=false
 CONSUMER_ALLOW_CREATE_SCHEMA=true
-CONSUMER_SUBMIT_API_CONFIG_URL=/genesis/mainnet/submit-api-config.json
-CONSUMER_BYRON_GENESIS_URL=/genesis/mainnet/byron-genesis.json
-CONSUMER_SHELLEY_GENESIS_URL=/genesis/mainnet/shelley-genesis.json
-CONSUMER_ALONZO_GENESIS_URL=/genesis/mainnet/alonzo-genesis.json
-CONSUMER_CONWAY_GENESIS_URL=/genesis/mainnet/conway-genesis.json
+CONSUMER_SUBMIT_API_CONFIG_URL=/genesis/{NETWORK}/submit-api-config.json
+CONSUMER_BYRON_GENESIS_URL=/genesis/{NETWORK}/byron-genesis.json
+CONSUMER_SHELLEY_GENESIS_URL=/genesis/{NETWORK}/shelley-genesis.json
+CONSUMER_ALONZO_GENESIS_URL=/genesis/{NETWORK}/alonzo-genesis.json
+CONSUMER_CONWAY_GENESIS_URL=/genesis/{NETWORK}/conway-genesis.json
 
 # Reward
 REWARD_HOSTNAME=explorer-reward
 REWARD_PORT=8767
 REWARD_SPRING_PROFILES_ACTIVE=local,koios
-REWARD_SCHEMA=mainnet
-REWARD_NETWORK=mainnet
+REWARD_SCHEMA={NETWORK}
+REWARD_NETWORK={NETWORK}
 
 REWARD_LIST_SIZE_EACH_THREAD=5
 REWARD_POOL_INFO_LIST_SIZE_EACH_THREAD=500
@@ -141,7 +141,7 @@ SCHEDULE_PORT=8768
 SCHEDULE_SPRING_PROFILES_ACTIVE=dev,koios,sentinel,minio
 SCHEDULE_FLYWAY_ENABLE=true
 SCHEDULE_FLYWAY_VALIDATE=false
-SCHEDULE_SCHEMA=mainnet
+SCHEDULE_SCHEMA={NETWORK}
 
 SCHEDULE_MAXIMUM_POOL_SIZE=48
 SCHEDULE_META_DATA_JOB_ENABLED=true
@@ -157,13 +157,13 @@ SCHEDULE_TOKEN_METADATA_URL=https://github.com/input-output-hk/metadata-registry
 SCHEDULE_TOKEN_METADATA_FOLDER=/registry
 SCHEDULE_API_CHECK_REWARD_URL=http://explorer-reward:8767/api/v1/rewards/fetch
 SCHEDULE_API_CHECK_POOL_HISTORY_URL=http://explorer-reward:8767/api/v1/pool-history/fetch
-SCHEDULE_NETWORK_NAME=mainnet
+SCHEDULE_NETWORK_NAME={NETWORK}
 
-SCHEDULE_KAFKA_GROUP_ID=mainnet
-SCHEDULE_KAFKA_REPORTS_TOPIC=dev.explorer.api.mainnet.reports
+SCHEDULE_KAFKA_GROUP_ID={NETWORK}
+SCHEDULE_KAFKA_REPORTS_TOPIC=dev.explorer.api.{NETWORK}.reports
 SCHEDULE_KAFKA_CONFIGURATION_ENABLED=true
 SCHEDULE_S3_REGION=null
-SCHEDULE_S3_BUCKET_NAME=cardano-explorer-api-storage-mainnet
+SCHEDULE_S3_BUCKET_NAME=cardano-explorer-api-storage-{NETWORK}
 SCHEDULE_S3_PATH_STYLE_ENABLED=true
 
 SCHEDULE_TOKEN_INFO_JOB_ENABLED=false
@@ -181,11 +181,11 @@ SCHEDULE_TOKEN_INFO_FIXED_DELAY=60000
 API_HOSTNAME=explorer-api
 API_PORT=8080
 API_SPRING_PROFILES_ACTIVE=dev,koios,sentinel,minio
-API_DB_SCHEMA=mainnet
+API_DB_SCHEMA={NETWORK}
 API_DB_MAX_POOL_SIZE=80
-API_KAFKA_REPORTS_TOPIC=dev.explorer.api.mainnet.reports
+API_KAFKA_REPORTS_TOPIC=dev.explorer.api.{NETWORK}.reports
 
-API_S3_BUCKET_NAME=cardano-explorer-api-storage-mainnet
+API_S3_BUCKET_NAME=cardano-explorer-api-storage-{NETWORK}
 API_S3_REGION=null
 API_CHECK_POOL_HISTORY_URL=http://explorer-reward:8767/api/v1/pool-history/fetch
 API_CHECK_POOL_INFO_URL=http://explorer-reward:8767/api/v1/pool-info/fetch
@@ -193,7 +193,7 @@ API_CHECK_EPOCH_STAKE_URL=http://explorer-reward:8767/api/v1/epoch-stake/fetch
 API_CHECK_ADA_POTS_URL=http://explorer-reward:8767/api/v1/ada-pots/fetch
 API_CHECK_REWARD_URL=http://explorer-reward:8767/api/v1/rewards/fetch
 API_CHECK_EPOCH_URL=http://explorer-reward:8767/api/v1/epochs/fetch
-API_NEWS_URL="http://dev.cf-explorer-monolith-mainnet.metadata.dev.cf-deployments.org:8085/?amount=%d"
+API_NEWS_URL="http://dev.cf-explorer-monolith-{NETWORK}.metadata.dev.cf-deployments.org:8085/?amount=%d"
 API_NEWS_CACHE_TIME=120
 API_MARKET_URL="https://api.coingecko.com/api/v3/coins/markets?ids=cardano&vs_currency=%s"
 API_MARKET_CACHE_TIME=120
@@ -214,7 +214,7 @@ AUTHENTICATION_SWAGGER_SERVER_URL=http://{MY_IPV4}:8021
 # Frontend
 FRONTEND_HOSTNAME=explorer-frontend
 FRONTEND_PORT=7276
-REACT_APP_NETWORK=mainnet
+REACT_APP_NETWORK={NETWORK}
 REACT_APP_JSD_WIDGET_KEY=9b9fab2d-676f-4359-a824-36cb99c247c1
 REACT_APP_EXT_ADA_PRICE_URL=https://www.coingecko.com/en/coins/cardano
 REACT_APP_API_URL=http://{MY_IPV4}:8080/api/v1
