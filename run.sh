@@ -66,3 +66,5 @@ config)
     $COMPOSE_CMD --env-file $CONFIG_FILE config
     ;;
 esac
+
+rm $CONFIG_FILE
