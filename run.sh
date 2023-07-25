@@ -41,9 +41,9 @@ if ! [ -x "$(command -v docker-compose)" ]; then
     COMPOSE_CMD="docker compose"
 fi
 
-command=(up down config)
+command=(up down config pull)
 if [[ ! " ${command[@]} " =~ " ${1} " ]]; then
-    echo "Usage: $0 {up|down}"
+    echo "Usage: $0 {up|down|config|pull}"
     exit 1
 fi
 
@@ -52,6 +52,10 @@ case $case in
 up)
     echo "Starting containers..."
     $COMPOSE_CMD --env-file $CONFIG_FILE up -d
+    ;;
+pull)
+    echo "Starting containers..."
+    $COMPOSE_CMD --env-file $CONFIG_FILE pull
     ;;
 down)
     echo "Stopping containers..."
