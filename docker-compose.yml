@@ -117,9 +117,9 @@ services:
     hostname: ${REDIS_SENTINEL_HOST}
     restart: always
     environment:
-      - REDIS_MASTER_HOST=${REDIS_MASTER_HOST}
+      - REDIS_MASTER_HOST=${REDIS_MASTER_EXTERNAL_HOST}
       - REDIS_MASTER_PASSWORD=${REDIS_MASTER_PASSWORD}
-      - REDIS_MASTER_PORT_NUMBER=${REDIS_MASTER_PORT}
+      - REDIS_MASTER_PORT_NUMBER=${REDIS_MASTER_EXTERNAL_PORT}
       - REDIS_MASTER_SET=${REDIS_MASTER_SET}
       - REDIS_SENTINEL_DOWN_AFTER_MILLISECONDS=5000
       - REDIS_SENTINEL_FAILOVER_TIMEOUT=500
@@ -153,7 +153,7 @@ services:
     command: server /data --console-address ":${MINIO_CONSOLE_PORT}"
 
   explorer-crawler:
-    image: pro.registry.gitlab.metadata.dev.cf-deployments.org/base-infrastructure/docker-registry/cf-ledger-crawler:${CRAWLER_VERSION}
+    image: ${DOCKER_REGISTRY_NAME}/cf-ledger-crawler:${CRAWLER_VERSION}
     container_name: explorer-crawler
     hostname: ${CRAWLER_HOSTNAME}
     restart: always
@@ -182,7 +182,7 @@ services:
       - explorer-net
 
   explorer-consumer:
-    image: pro.registry.gitlab.metadata.dev.cf-deployments.org/base-infrastructure/docker-registry/cf-ledger-consumer:${CONSUMER_VERSION}
+    image: ${DOCKER_REGISTRY_NAME}/cf-ledger-consumer:${CONSUMER_VERSION}
     container_name: explorer-consumer
     hostname: ${CONSUMER_HOSTNAME}
     restart: always
@@ -227,7 +227,7 @@ services:
       - ${CONSUMER_PORT}:${CONSUMER_PORT}
 
   explorer-reward:
-    image: pro.registry.gitlab.metadata.dev.cf-deployments.org/base-infrastructure/docker-registry/cf-explorer-rewards:${REWARD_VERSION}
+    image: ${DOCKER_REGISTRY_NAME}/cf-explorer-rewards:${REWARD_VERSION}
     container_name: explorer-reward
     hostname: ${REWARD_HOSTNAME}
     restart: always
@@ -260,7 +260,7 @@ services:
       - ${REWARD_PORT}:${REWARD_PORT}
 
   explorer-schedule:
-    image: pro.registry.gitlab.metadata.dev.cf-deployments.org/base-infrastructure/docker-registry/cf-ledger-consumer-schedules:${SCHEDULE_VERSION}
+    image: ${DOCKER_REGISTRY_NAME}/cf-ledger-consumer-schedules:${SCHEDULE_VERSION}
     container_name: explorer-schedule
     hostname: ${SCHEDULE_HOSTNAME}
     restart: always
@@ -324,7 +324,7 @@ services:
 
   explorer-api:
     container_name: explorer-api
-    image: pro.registry.gitlab.metadata.dev.cf-deployments.org/base-infrastructure/docker-registry/cf-explorer-api:${API_VERSION}
+    image: ${DOCKER_REGISTRY_NAME}/cf-explorer-api:${API_VERSION}
     hostname: ${API_HOSTNAME}
     restart: always
     depends_on:
@@ -378,7 +378,7 @@ services:
 
   explorer-authentication:
     container_name: explorer-authentication
-    image: pro.registry.gitlab.metadata.dev.cf-deployments.org/base-infrastructure/docker-registry/cf-explorer-authentication:${AUTHENTICATION_VERSION}
+    image: ${DOCKER_REGISTRY_NAME}/cf-explorer-authentication:${AUTHENTICATION_VERSION}
     hostname: ${AUTHENTICATION_HOSTNAME}
     restart: always
     depends_on:
@@ -407,7 +407,7 @@ services:
       - ${AUTHENTICATION_EXTERNAL_PORT}:8080
   explorer-frontend:
     container_name: explorer-frontend
-    image: pro.registry.gitlab.metadata.dev.cf-deployments.org/base-infrastructure/docker-registry/cf-explorer-frontend:${FRONTEND_VERSION}
+    image: ${DOCKER_REGISTRY_NAME}/cf-explorer-frontend:${FRONTEND_VERSION}
     hostname: ${FRONTEND_HOSTNAME}
     restart: always
     depends_on:
